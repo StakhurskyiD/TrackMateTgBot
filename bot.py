@@ -1,45 +1,98 @@
+
+
+# pylint: disable=unused-argument, wrong-import-position
+# This program is dedicated to the public domain under the CC0 license.
+
+"""
+Basic example for a bot that uses inline keyboards. For an in-depth explanation, check out
+ https://github.com/python-telegram-bot/python-telegram-bot/wiki/InlineKeyboard-Example.
+"""
+import logging
 import os
-import telebot
-from utils import get_daily_horoscope
+
 from dotenv import load_dotenv
+from telegram import __version__ as TG_VER, ReplyKeyboardMarkup
+from telegram.ext import filters, CallbackContext
+
+try:
+    from telegram import __version_info__
+except ImportError:
+    __version_info__ = (0, 0, 0, 0, 0)  # type: ignore[assignment]
+
+if __version_info__ < (20, 0, 0, "alpha", 1):
+    raise RuntimeError(
+        f"This example is not compatible with your current PTB version {TG_VER}. To view the "
+        f"{TG_VER} version of this example, "
+        f"visit https://docs.python-telegram-bot.org/en/v{TG_VER}/examples.html"
+    )
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler
+
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message with three inline buttons attached."""
+
+    main_menu = [
+        ["Suggest a track"],
+        ["Events", "About"],
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(main_menu)
+
+    await update.message.reply_text("Please choose:", reply_markup=reply_markup)
+
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Parses the CallbackQuery and updates the message text."""
+    query = update.callback_query
+    print(query);
+
+    # CallbackQueries need to be answered, even if no notification to the user is needed
+    # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
+    await query.answer()
+
+    await query.edit_message_text(text=f"Selected option: {query.data}")
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays info on how to use the bot."""
+    await update.message.reply_text("Use /start to test this bot.")
+
+
+async def about(update: Update, context: CallbackContext)-> None:
+    text = update.message.text
+    if text == 'Events':
+        # do something for Option 1
+        await update.message.reply_text("You chose Option 1.")
+        await update.message.reply_text("You chose Option 1.")
+    elif text == 'About':
+        # do something for Option 2
+        await update.message.reply_text("You chose Option 2.")
+    # Add more elif statements for other options if necessary
+
+
+def main() -> None:
+    """Run the bot."""
+    # Create the Application and pass it your bot's token.
+    application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CommandHandler("help", help_command))
+
+    application.add_handler(MessageHandler(filters.Text, about)) #& ~filters.Command
+
+    # Run the bot until the user presses Ctrl-C
+    application.run_polling()
 
 load_dotenv()  # take environment variables from .env.
-bot = telebot.TeleBot(os.getenv('BOT_TOKEN'))
 
-
-@bot.message_handler(commands=['start', 'hello'])
-def send_welcome(message):
-    bot.reply_to(message, "Howdy, how are you doing?")
-
-
-@bot.message_handler(commands=['horoscope'])
-def sign_handler(message):
-    text = "What's your zodiac sign?\nChoose one: *Aries*, *Taurus*, *Gemini*, *Cancer,* *Leo*, *Virgo*, *Libra*, *Scorpio*, *Sagittarius*, *Capricorn*, *Aquarius*, and *Pisces*."
-    sent_msg = bot.send_message(message.chat.id, text, parse_mode="Markdown")
-    bot.register_next_step_handler(sent_msg, day_handler)
-
-
-def day_handler(message):
-    sign = message.text
-    text = "What day do you want to know?\nChoose one: *TODAY*, *TOMORROW*, *YESTERDAY*, or a date in format YYYY-MM-DD."
-    sent_msg = bot.send_message(
-        message.chat.id, text, parse_mode="Markdown")
-    bot.register_next_step_handler(
-        sent_msg, fetch_horoscope, sign.capitalize())
-
-
-def fetch_horoscope(message, sign):
-    day = message.text
-    horoscope = get_daily_horoscope(sign, day)
-    data = horoscope["data"]
-    horoscope_message = f'*Horoscope:* {data["horoscope_data"]}\n*Sign:* {sign}\n*Day:* {data["date"]}'
-    bot.send_message(message.chat.id, "Here's your horoscope!")
-    bot.send_message(message.chat.id, horoscope_message, parse_mode="Markdown")
-
-
-@bot.message_handler(func=lambda msg: True)
-def echo_all(message):
-    bot.reply_to(message, message.text)
-
-
-bot.infinity_polling()
+if __name__ == "__main__":
+    main()
